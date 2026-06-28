@@ -198,8 +198,15 @@ st.markdown(
 # ======================
 df_day = pd.read_csv("egauge90773_i11_alerts_per_day.csv")
 df_detail = pd.read_csv("egauge90773_i11_alerts_final.csv")
+df_noprod = pd.read_csv("egauge90773_i11_noprod_alerts_final.csv")
 
 df_detail["alert_start"] = pd.to_datetime(df_detail["alert_start"])
+
+if "alert_start" in df_noprod.columns:
+    df_noprod["alert_start"] = pd.to_datetime(df_noprod["alert_start"])
+
+if "alert_end" in df_noprod.columns:
+    df_noprod["alert_end"] = pd.to_datetime(df_noprod["alert_end"])
 
 # Convert dates
 df_day["date_dt"] = pd.to_datetime(df_day["date"]).dt.date
@@ -208,6 +215,11 @@ if "date" in df_detail.columns:
     df_detail["date_dt"] = pd.to_datetime(df_detail["date"]).dt.date
 else:
     df_detail["date_dt"] = df_detail["alert_start"].dt.date
+
+if "date" in df_noprod.columns:
+    df_noprod["date_dt"] = pd.to_datetime(df_noprod["date"]).dt.date
+elif "alert_start" in df_noprod.columns:
+    df_noprod["date_dt"] = df_noprod["alert_start"].dt.date
 
 # Normalize useful columns
 if "severity" in df_day.columns:
@@ -412,6 +424,24 @@ if selected_alert_types and "alert_type" in df_day_filtered.columns:
         df_day_filtered["alert_type"].astype(str).isin(selected_alert_types)
     ]
 
+# ======================
+# DEFAULT SORT OVERVIEW
+# Sort by date, then alert_type
+# ======================
+sort_cols = []
+
+if "date_dt" in df_day_filtered.columns:
+    sort_cols.append("date_dt")
+
+if "alert_type" in df_day_filtered.columns:
+    sort_cols.append("alert_type")
+
+if sort_cols:
+    df_day_filtered = df_day_filtered.sort_values(
+        by=sort_cols,
+        ascending=True
+    )
+
 # Sidebar count
 st.sidebar.markdown("---")
 st.sidebar.metric("Displayed Rows", len(df_day_filtered))
@@ -502,10 +532,64 @@ if st.session_state.page == "detail" and st.session_state.selected_date:
     selected_context = st.session_state.selected_context
 
     selected_date_label = selected_context.get("date", st.session_state.selected_date)
+    selected_date_dt = selected_context.get("date_dt")
     selected_egauge = selected_context.get("egauge")
     selected_register = selected_context.get("register")
     selected_alert_type = selected_context.get("alert_type")
 
+    selected_alert_type_clean = str(selected_alert_type).strip().lower()
+
+    # ======================
+    # SPECIAL VIEW FOR NON EFFICIENT
+    # ======================
+    if selected_alert_type_clean == "non efficient":
+
+        detail_title = f"Non Efficient Alerts for {selected_date_label}"
+
+        st.markdown(
+            f"<h2>{detail_title}</h2>",
+            unsafe_allow_html=True
+        )
+
+        # Filter noprod data
+        df_noprod_filtered = df_noprod.copy()
+
+        if selected_date_dt is not None and "date_dt" in df_noprod_filtered.columns:
+            df_noprod_filtered = df_noprod_filtered[
+                df_noprod_filtered["date_dt"] == selected_date_dt
+            ]
+
+        noprod_display_cols = [
+            "alert_start",
+            "alert_end",
+            "duration"
+        ]
+
+        existing_noprod_cols = [
+            col for col in noprod_display_cols
+            if col in df_noprod_filtered.columns
+        ]
+
+        if not existing_noprod_cols:
+            st.error(
+                "Missing columns in egauge90773_i11_noprod_alerts_final.csv. Expected: alert_start, alert_end, duration."
+            )
+            st.stop()
+
+        if df_noprod_filtered.empty:
+            st.warning("No non efficient detailed alerts found for this selection.")
+
+        st.dataframe(
+            df_noprod_filtered[existing_noprod_cols],
+            use_container_width=True,
+            height=520
+        )
+
+        st.stop()
+
+    # ======================
+    # STANDARD DETAIL VIEW
+    # ======================
     detail_title = f"Detailed Alerts for {selected_date_label}"
 
     if selected_egauge:
@@ -526,7 +610,7 @@ if st.session_state.page == "detail" and st.session_state.selected_date:
     # FILTER DETAIL DATA
     # ======================
     df_filtered = df_detail[
-        df_detail["date_dt"] == selected_context.get("date_dt")
+        df_detail["date_dt"] == selected_date_dt
     ].copy()
 
     if selected_egauge is not None and "egauge" in df_filtered.columns:

@@ -12,3 +12,8 @@ date,alert_type,status,severity,total_alerts,total_anomalies,egauge,register,cre
 2026-06-20,Production Anomaly,Open,HIGH,35,739,egauge90773,i11,AI Model
 2026-06-21,Production Anomaly,Open,MEDIUM,42,218,egauge90773,i11,AI Model
 2026-06-22,Production Anomaly,Open,HIGH,28,357,egauge90773,i11,AI Model
+2026-05-24,Non efficient,Open,Low,1,,egauge90773,i11,AI Model
+2026-06-07,Non efficient,Open,Low,1,,egauge90773,i11,AI Model
+2026-06-17,Non efficient,Open,Low,1,,egauge90773,i11,AI Model
+2026-06-18,Non efficient,Open,Low,1,,egauge90773,i11,AI Model
+2026-06-20,Non efficient,Open,Low,1,,egauge90773,i11,AI Model
