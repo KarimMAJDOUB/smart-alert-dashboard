@@ -1,3 +1,5 @@
+import re
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -196,9 +198,40 @@ st.markdown(
 # ======================
 # LOAD DATA
 # ======================
-df_day = pd.read_csv("egauge90773_i11_alerts_per_day.csv")
-df_detail = pd.read_csv("egauge90773_i11_alerts_final.csv")
-df_noprod = pd.read_csv("egauge90773_i11_noprod_alerts_final.csv")
+df_day = pd.read_csv("./data/daily_alerts.csv")
+df_detail = pd.read_csv("./data/production_anomaly_alerts.csv")
+df_noprod = pd.read_csv("./data/non_efficient_alerts.csv")
+
+# ======================
+# LEGACY NAMING COMPATIBILITY
+# ======================
+_LEGACY_NAME_PATTERN = re.compile("egauge", re.IGNORECASE)
+
+def _legacy_name_repl(match):
+    old = match.group(0)
+    if old.isupper():
+        return "SENSOR"
+    if old[0].isupper():
+        return "Sensor"
+    return "sensor"
+
+def to_sensor_naming(text):
+    return _LEGACY_NAME_PATTERN.sub(_legacy_name_repl, text)
+
+def normalize_sensor_naming(df):
+    df = df.rename(columns={col: to_sensor_naming(str(col)) for col in df.columns})
+
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].map(
+                lambda v: to_sensor_naming(v) if isinstance(v, str) else v
+            )
+
+    return df
+
+df_day = normalize_sensor_naming(df_day)
+df_detail = normalize_sensor_naming(df_detail)
+df_noprod = normalize_sensor_naming(df_noprod)
 
 df_detail["alert_start"] = pd.to_datetime(df_detail["alert_start"])
 
@@ -220,6 +253,46 @@ if "date" in df_noprod.columns:
     df_noprod["date_dt"] = pd.to_datetime(df_noprod["date"]).dt.date
 elif "alert_start" in df_noprod.columns:
     df_noprod["date_dt"] = df_noprod["alert_start"].dt.date
+
+# ======================
+# MACHINE MAPPING
+# Derived automatically from sensor + register
+# ======================
+MACHINE_MAPPING = {
+    ("sensor90773", "i11"): "Injection Molding 1",
+    ("sensor90773", "i21"): "Injection Molding 3",
+    ("sensor90773", "i31"): "Injection Molding 6",
+    ("sensor90773", "i41"): "Injection Molding 2",
+    ("sensor90773", "i51"): "Injection Molding 5",
+    ("sensor113530", "i11"): "Blow Molding 11",
+    ("sensor113530", "i21"): "Blow Molding 6",
+    ("sensor113530", "i31"): "Blow Molding 5",
+    ("sensor113530", "i41"): "Blow Molding 8",
+    ("sensor113530", "i51"): "Blow Molding 9",
+    ("sensor113526", "i11"): "Injection Molding 6",
+    ("sensor113526", "i21"): "Injection Molding 17",
+    ("sensor113526", "i31"): "Injection Molding 15",
+}
+
+def get_machine(sensor, register):
+    return MACHINE_MAPPING.get(
+        (str(sensor).strip(), str(register).strip()),
+        "not defined"
+    )
+
+def add_machine_column(df):
+    if "sensor" in df.columns and "register" in df.columns:
+        df["machine"] = df.apply(
+            lambda r: get_machine(r["sensor"], r["register"]),
+            axis=1
+        )
+    else:
+        df["machine"] = "not defined"
+    return df
+
+df_day = add_machine_column(df_day)
+df_detail = add_machine_column(df_detail)
+df_noprod = add_machine_column(df_noprod)
 
 # Normalize useful columns
 if "severity" in df_day.columns:
@@ -255,8 +328,8 @@ max_date = df_day["date_dt"].max()
 if "search_filter" not in st.session_state:
     st.session_state.search_filter = ""
 
-if "egauge_filter" not in st.session_state:
-    st.session_state.egauge_filter = []
+if "sensor_filter" not in st.session_state:
+    st.session_state.sensor_filter = []
 
 if "register_filter" not in st.session_state:
     st.session_state.register_filter = []
@@ -273,7 +346,7 @@ if "alert_type_filter" not in st.session_state:
 # Clear filters function
 def clear_filters():
     st.session_state.search_filter = ""
-    st.session_state.egauge_filter = []
+    st.session_state.sensor_filter = []
     st.session_state.register_filter = []
     st.session_state.date_filter = (min_date, max_date)
     st.session_state.severity_filter = []
@@ -298,21 +371,21 @@ with side_col2:
 # Search bar
 search_query = st.sidebar.text_input(
     "Search",
-    placeholder="Search egauge, register, alert type...",
+    placeholder="Search sensor, register, alert type...",
     key="search_filter"
 )
 
-# Egauge filter
-egauge_options = (
-    sorted(df_day["egauge"].dropna().astype(str).unique())
-    if "egauge" in df_day.columns
+# Sensor filter
+sensor_options = (
+    sorted(df_day["sensor"].dropna().astype(str).unique())
+    if "sensor" in df_day.columns
     else []
 )
 
-selected_egauges = st.sidebar.multiselect(
-    "Egauge",
-    egauge_options,
-    key="egauge_filter"
+selected_sensors = st.sidebar.multiselect(
+    "Sensor",
+    sensor_options,
+    key="sensor_filter"
 )
 
 # Register filter
@@ -371,8 +444,9 @@ if search_query:
     search_cols = [
         col for col in [
             "date",
-            "egauge",
+            "sensor",
             "register",
+            "machine",
             "alert_type",
             "status",
             "severity",
@@ -391,10 +465,10 @@ if search_query:
             )
         ]
 
-# Egauge filter
-if selected_egauges and "egauge" in df_day_filtered.columns:
+# Sensor filter
+if selected_sensors and "sensor" in df_day_filtered.columns:
     df_day_filtered = df_day_filtered[
-        df_day_filtered["egauge"].astype(str).isin(selected_egauges)
+        df_day_filtered["sensor"].astype(str).isin(selected_sensors)
     ]
 
 # Register filter
@@ -453,7 +527,7 @@ if st.session_state.page == "overview":
 
     st.markdown("### 📊 Daily Alerts Overview")
 
-    header_cols = st.columns([1.5, 1.8, 1.4, 1.4, 1.2, 1.5, 1.6, 0.8])
+    header_cols = st.columns([1.3, 1.6, 1.2, 1.3, 0.9, 1.2, 1.4, 1.0, 1.7, 1.3, 0.7])
 
     header_cols[0].markdown("**Date**")
     header_cols[1].markdown("**Alert Type**")
@@ -461,8 +535,11 @@ if st.session_state.page == "overview":
     header_cols[3].markdown("**Severity**")
     header_cols[4].markdown("**Alerts**")
     header_cols[5].markdown("**Anomalies**")
-    header_cols[6].markdown("**Created By**")
-    header_cols[7].markdown("**Details**")
+    header_cols[6].markdown("**Sensor**")
+    header_cols[7].markdown("**Register**")
+    header_cols[8].markdown("**Machine**")
+    header_cols[9].markdown("**Created By**")
+    header_cols[10].markdown("**Details**")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -473,8 +550,8 @@ if st.session_state.page == "overview":
 
         st.markdown('<div class="row-card">', unsafe_allow_html=True)
 
-        col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(
-            [1.5, 1.8, 1.4, 1.4, 1.2, 1.5, 1.6, 0.8]
+        col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11 = st.columns(
+            [1.3, 1.6, 1.2, 1.3, 0.9, 1.2, 1.4, 1.0, 1.7, 1.3, 0.7]
         )
 
         col1.markdown(f"**{row['date']}**")
@@ -490,9 +567,16 @@ if st.session_state.page == "overview":
 
         col5.markdown(f"**{row['total_alerts']}**")
         col6.markdown(f"**{row['total_anomalies']}**")
-        col7.markdown(f"**{row['created_by']}**")
 
-        if col8.button(
+        row_sensor = row["sensor"] if "sensor" in row.index else "-"
+        row_register = row["register"] if "register" in row.index else "-"
+
+        col7.markdown(f"**{row_sensor}**")
+        col8.markdown(f"**{row_register}**")
+        col9.markdown(f"**{row['machine']}**")
+        col10.markdown(f"**{row['created_by']}**")
+
+        if col11.button(
             "",
             icon=":material/search:",
             key=f"btn_{i}",
@@ -505,7 +589,7 @@ if st.session_state.page == "overview":
             st.session_state.selected_context = {
                 "date": row["date"],
                 "date_dt": row["date_dt"],
-                "egauge": row["egauge"] if "egauge" in row.index else None,
+                "sensor": row["sensor"] if "sensor" in row.index else None,
                 "register": row["register"] if "register" in row.index else None,
                 "alert_type": row["alert_type"] if "alert_type" in row.index else None,
                 "severity": row["severity"] if "severity" in row.index else None
@@ -533,7 +617,7 @@ if st.session_state.page == "detail" and st.session_state.selected_date:
 
     selected_date_label = selected_context.get("date", st.session_state.selected_date)
     selected_date_dt = selected_context.get("date_dt")
-    selected_egauge = selected_context.get("egauge")
+    selected_sensor = selected_context.get("sensor")
     selected_register = selected_context.get("register")
     selected_alert_type = selected_context.get("alert_type")
 
@@ -572,7 +656,7 @@ if st.session_state.page == "detail" and st.session_state.selected_date:
 
         if not existing_noprod_cols:
             st.error(
-                "Missing columns in egauge90773_i11_noprod_alerts_final.csv. Expected: alert_start, alert_end, duration."
+                "Missing columns in non_efficient_alerts.csv. Expected: alert_start, alert_end, duration."
             )
             st.stop()
 
@@ -592,8 +676,8 @@ if st.session_state.page == "detail" and st.session_state.selected_date:
     # ======================
     detail_title = f"Detailed Alerts for {selected_date_label}"
 
-    if selected_egauge:
-        detail_title += f" - {selected_egauge}"
+    if selected_sensor:
+        detail_title += f" - {selected_sensor}"
 
     if selected_register:
         detail_title += f" - {selected_register}"
@@ -613,9 +697,9 @@ if st.session_state.page == "detail" and st.session_state.selected_date:
         df_detail["date_dt"] == selected_date_dt
     ].copy()
 
-    if selected_egauge is not None and "egauge" in df_filtered.columns:
+    if selected_sensor is not None and "sensor" in df_filtered.columns:
         df_filtered = df_filtered[
-            df_filtered["egauge"].astype(str) == str(selected_egauge)
+            df_filtered["sensor"].astype(str) == str(selected_sensor)
         ]
 
     if selected_register is not None and "register" in df_filtered.columns:
