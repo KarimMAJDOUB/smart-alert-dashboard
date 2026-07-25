@@ -259,19 +259,19 @@ elif "alert_start" in df_noprod.columns:
 # Derived automatically from sensor + register
 # ======================
 MACHINE_MAPPING = {
-    ("sensor90773", "i11"): "Injection Molding 1",
-    ("sensor90773", "i21"): "Injection Molding 3",
-    ("sensor90773", "i31"): "Injection Molding 6",
-    ("sensor90773", "i41"): "Injection Molding 2",
-    ("sensor90773", "i51"): "Injection Molding 5",
-    ("sensor113530", "i11"): "Blow Molding 11",
-    ("sensor113530", "i21"): "Blow Molding 6",
-    ("sensor113530", "i31"): "Blow Molding 5",
-    ("sensor113530", "i41"): "Blow Molding 8",
-    ("sensor113530", "i51"): "Blow Molding 9",
-    ("sensor113526", "i11"): "Injection Molding 6",
-    ("sensor113526", "i21"): "Injection Molding 17",
-    ("sensor113526", "i31"): "Injection Molding 15",
+    ("egauge90773", "i11"): "Injection Molding 1",
+    ("egauge90773", "i21"): "Injection Molding 3",
+    ("egauge90773", "i31"): "Injection Molding 6",
+    ("egauge90773", "i41"): "Injection Molding 2",
+    ("egauge90773", "i51"): "Injection Molding 5",
+    ("egauge113530", "i11"): "Blow Molding 11",
+    ("egauge113530", "i21"): "Blow Molding 6",
+    ("egauge113530", "i31"): "Blow Molding 5",
+    ("egauge113530", "i41"): "Blow Molding 8",
+    ("egauge113530", "i51"): "Blow Molding 9",
+    ("egauge113526", "i11"): "Injection Molding 6",
+    ("egauge113526", "i21"): "Injection Molding 17",
+    ("egauge113526", "i31"): "Injection Molding 15",
 }
 
 def get_machine(sensor, register):
