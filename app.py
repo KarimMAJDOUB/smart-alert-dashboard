@@ -272,6 +272,12 @@ MACHINE_MAPPING = {
     ("egauge113526", "i11"): "Injection Molding 6",
     ("egauge113526", "i21"): "Injection Molding 17",
     ("egauge113526", "i31"): "Injection Molding 15",
+    ("egauge112080", "i11"): "L1- Heater up",
+    ("egauge112080", "i21"): "L1-Heater middle",
+    ("egauge112080", "i31"): "L1-Heater under",
+    ("egauge112080", "i41"): "L2- Heater up",
+    ("egauge112080", "i51"): "L2-Heater middle",
+    
 }
 
 def get_machine(sensor, register):
